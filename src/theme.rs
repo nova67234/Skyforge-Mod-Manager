@@ -20,7 +20,16 @@ pub struct Palette {
     pub fill_tertiary: Color32,
     pub toggle_off: Color32,
     pub selection: Color32,
+    /// Windows, sheets, menus and tooltips: whatever floats over the page.
+    pub float: Color32,
+    /// Text fields and other wells.
+    pub field: Color32,
+    /// The sliding knob of a segmented control.
+    pub knob: Color32,
     pub dark: bool,
+    /// Liquid Glass: `window`, `sidebar` and `card` are the panel marker and `float` the
+    /// floating one, which [`crate::liquid_glass::glassify`] swaps for real glass.
+    pub liquid: bool,
 }
 
 pub const LIGHT: Palette = Palette {
@@ -42,7 +51,11 @@ pub const LIGHT: Palette = Palette {
     fill_tertiary: Color32::from_black_alpha(22),
     toggle_off: Color32::from_rgb(0xE9, 0xE9, 0xEB),
     selection: Color32::from_rgba_premultiplied(0, 12, 25, 40),
+    float: Color32::WHITE,
+    field: Color32::WHITE,
+    knob: Color32::WHITE,
     dark: false,
+    liquid: false,
 };
 
 pub const DARK: Palette = Palette {
@@ -64,19 +77,252 @@ pub const DARK: Palette = Palette {
     fill_tertiary: Color32::from_rgba_premultiplied(36, 36, 36, 36),
     toggle_off: Color32::from_rgb(0x39, 0x39, 0x3D),
     selection: Color32::from_rgba_premultiplied(2, 31, 60, 60),
+    float: Color32::from_rgb(0x2C, 0x2C, 0x2E),
+    field: Color32::from_rgb(0x2C, 0x2C, 0x2E),
+    knob: Color32::from_rgb(0x4A, 0x4A, 0x4C),
     dark: true,
+    liquid: false,
+};
+
+/// A translucent colour from straight (un-premultiplied) RGBA, usable in a `const`.
+const fn glass(r: u8, g: u8, b: u8, a: u8) -> Color32 {
+    Color32::from_rgba_premultiplied(
+        ((r as u16 * a as u16 + 127) / 255) as u8,
+        ((g as u16 * a as u16 + 127) / 255) as u8,
+        ((b as u16 * a as u16 + 127) / 255) as u8,
+        a,
+    )
+}
+
+/// What marks a glass panel and a floating glass surface, dark then light. Chosen so
+/// that, painted as they are (on a GPU that can't draw the glass), they're plain
+/// translucent panels.
+const LIQUID_PANEL: [Color32; 2] = [glass(28, 30, 38, 171), glass(246, 247, 250, 171)];
+const LIQUID_FLOAT: [Color32; 2] = [glass(44, 46, 58, 182), glass(225, 230, 245, 182)];
+
+/// Liquid Glass, dark. Fields and controls are grey at a low opacity, which reads on any
+/// glass.
+pub const LIQUID_DARK: Palette = Palette {
+    window: LIQUID_PANEL[0],
+    sidebar: LIQUID_PANEL[0],
+    card: LIQUID_PANEL[0],
+    card_hover: glass(255, 255, 255, 16),
+    stroke: glass(255, 255, 255, 26),
+    separator: glass(255, 255, 255, 28),
+    text: Color32::from_rgb(242, 242, 245),
+    text_secondary: Color32::from_rgb(190, 193, 200),
+    text_tertiary: Color32::from_rgb(140, 143, 152),
+    accent: Color32::from_rgb(64, 140, 255),
+    accent_text: Color32::WHITE,
+    green: Color32::from_rgb(0x30, 0xD1, 0x58),
+    red: Color32::from_rgb(0xFF, 0x45, 0x3A),
+    orange: Color32::from_rgb(0xFF, 0x9F, 0x0A),
+    fill_secondary: glass(118, 118, 128, 61),
+    fill_tertiary: glass(118, 118, 128, 92),
+    toggle_off: glass(118, 118, 128, 110),
+    selection: Color32::from_rgba_premultiplied(16, 35, 64, 64),
+    float: LIQUID_FLOAT[0],
+    field: glass(118, 118, 128, 61),
+    knob: glass(170, 172, 184, 120),
+    dark: true,
+    liquid: true,
+};
+
+/// Liquid Glass, light: white glass, dark ink.
+pub const LIQUID_LIGHT: Palette = Palette {
+    window: LIQUID_PANEL[1],
+    sidebar: LIQUID_PANEL[1],
+    card: LIQUID_PANEL[1],
+    card_hover: Color32::from_black_alpha(12),
+    stroke: Color32::from_black_alpha(18),
+    separator: Color32::from_black_alpha(24),
+    text: Color32::from_rgb(28, 28, 31),
+    text_secondary: Color32::from_rgb(88, 90, 98),
+    text_tertiary: Color32::from_rgb(128, 130, 140),
+    accent: Color32::from_rgb(10, 110, 235),
+    accent_text: Color32::WHITE,
+    green: Color32::from_rgb(0x28, 0xB4, 0x4C),
+    red: Color32::from_rgb(0xF0, 0x38, 0x2E),
+    orange: Color32::from_rgb(0xF0, 0x8A, 0x00),
+    fill_secondary: glass(118, 118, 128, 36),
+    fill_tertiary: glass(118, 118, 128, 58),
+    toggle_off: glass(118, 118, 128, 80),
+    selection: Color32::from_rgba_premultiplied(2, 22, 47, 48),
+    float: LIQUID_FLOAT[1],
+    field: glass(118, 118, 128, 36),
+    knob: glass(255, 255, 255, 215),
+    dark: false,
+    liquid: true,
 };
 
 pub const RADIUS_CARD: u8 = 12;
 pub const RADIUS_CONTROL: u8 = 8;
 
+/// How round the two glass panels are, and the gap around them, under Liquid Glass.
+pub const RADIUS_PANEL: u8 = 20;
+pub const PANEL_GAP: i8 = 10;
+
+/// Whether the Liquid Glass theme is on.
+static LIQUID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn is_liquid() -> bool {
+    LIQUID.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Turns Liquid Glass on or off and restyles the app to match.
+pub fn set_liquid(ctx: &egui::Context, on: bool) {
+    LIQUID.store(on, std::sync::atomic::Ordering::Relaxed);
+    apply(ctx);
+}
+
+fn palette_for(dark: bool) -> Palette {
+    match (is_liquid(), dark) {
+        (false, false) => LIGHT,
+        (false, true) => DARK,
+        (true, false) => LIQUID_LIGHT,
+        (true, true) => LIQUID_DARK,
+    }
+}
+
 pub fn palette(ctx: &egui::Context) -> Palette {
-    if ctx.theme() == egui::Theme::Dark { DARK } else { LIGHT }
+    palette_for(ctx.theme() == egui::Theme::Dark)
+}
+
+/// Under Liquid Glass, the colours that mark its panels and floating surfaces this frame.
+pub fn liquid_markers(ctx: &egui::Context) -> Option<crate::liquid_glass::Markers> {
+    is_liquid().then(|| liquid_markers_for(ctx.theme() == egui::Theme::Light))
+}
+
+/// Liquid Glass's markers, light or dark, whatever theme is active.
+pub(crate) fn liquid_markers_for(light: bool) -> crate::liquid_glass::Markers {
+    let i = light as usize;
+    crate::liquid_glass::Markers { panel: LIQUID_PANEL[i], float: LIQUID_FLOAT[i], light }
+}
+
+/// The colour the window is cleared to: under Liquid Glass, what the flowing colours
+/// blend into.
+pub fn base_color(ctx: &egui::Context) -> Color32 {
+    let p = palette(ctx);
+    match (p.liquid, p.dark) {
+        (false, _) => p.window,
+        (true, true) => Color32::from_rgb(12, 13, 18),
+        (true, false) => Color32::from_rgb(226, 231, 242),
+    }
+}
+
+/// Paints what Liquid Glass sits on: colours flowing slowly behind every panel. Call
+/// first in the frame, before any panel is drawn. Does nothing under the other themes.
+pub fn paint_backdrop(ctx: &egui::Context) {
+    let p = palette(ctx);
+    if !p.liquid {
+        return;
+    }
+    let rect = ctx.content_rect();
+    let painter = ctx.layer_painter(egui::LayerId::background());
+    let base = base_color(ctx);
+    painter.rect_filled(rect, 0.0, base);
+
+    let t = ctx.input(|i| i.time) as f32;
+    let fields = flow_fields(t, rect, p.dark);
+    let base = [base.r() as f32, base.g() as f32, base.b() as f32];
+    const COLS: u32 = 36;
+    const ROWS: u32 = 24;
+    let mut mesh = egui::Mesh::default();
+    for j in 0..=ROWS {
+        for i in 0..=COLS {
+            let pos = egui::pos2(
+                rect.left() + rect.width() * i as f32 / COLS as f32,
+                rect.top() + rect.height() * j as f32 / ROWS as f32,
+            );
+            mesh.colored_vertex(pos, flow_color(pos, base, &fields));
+        }
+    }
+    for j in 0..ROWS {
+        for i in 0..COLS {
+            let a = j * (COLS + 1) + i;
+            mesh.add_triangle(a, a + 1, a + COLS + 1);
+            mesh.add_triangle(a + 1, a + COLS + 2, a + COLS + 1);
+        }
+    }
+    painter.add(egui::Shape::mesh(mesh));
+    // The colours only need to move while someone is looking.
+    if ctx.input(|i| i.focused) {
+        ctx.request_repaint_after(std::time::Duration::from_millis(50));
+    }
+}
+
+/// One of the flowing colour fields: where its centre is, how far it reaches, its colour
+/// and how strongly it's laid.
+struct Field {
+    center: egui::Pos2,
+    radius: f32,
+    color: [f32; 3],
+    strength: f32,
+}
+
+/// The fields at time `t` over `rect`.
+fn flow_fields(t: f32, rect: egui::Rect, dark: bool) -> Vec<Field> {
+    // Electric blue, violet, magenta, amber, teal, sky.
+    const COLORS: [[f32; 3]; 6] = [
+        [40.0, 105.0, 255.0],
+        [138.0, 70.0, 255.0],
+        [255.0, 60.0, 160.0],
+        [255.0, 150.0, 50.0],
+        [0.0, 195.0, 170.0],
+        [70.0, 190.0, 255.0],
+    ];
+    let span = rect.width().max(rect.height()).max(1.0);
+    COLORS
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| {
+            let i = i as u32;
+            let speed = 0.035 + 0.04 * hash01(i, 31);
+            let phase = hash01(i, 32) * std::f32::consts::TAU;
+            let (ax, ay) = (0.12 + 0.76 * hash01(i, 33), 0.12 + 0.76 * hash01(i, 34));
+            let orbit = 0.16 + 0.1 * hash01(i, 35);
+            let center = egui::pos2(
+                rect.left() + rect.width() * (ax + orbit * (t * speed + phase).cos()),
+                rect.top() + rect.height() * (ay + orbit * 0.8 * (t * speed * 1.3 + phase).sin()),
+            );
+            // Light: the same hues, washed toward white.
+            let color = if dark { c } else { c.map(|v| v + (255.0 - v) * 0.35) };
+            Field { center, radius: span * (0.26 + 0.1 * hash01(i, 36)), color, strength: if dark { 0.85 } else { 0.75 } }
+        })
+        .collect()
+}
+
+/// The flowing colour at `pos`: each field laid over `base` by how near its centre `pos`
+/// is (a Gaussian falloff).
+fn flow_color(pos: egui::Pos2, base: [f32; 3], fields: &[Field]) -> Color32 {
+    let mut c = base;
+    for f in fields {
+        let d2 = (pos - f.center).length_sq() / (f.radius * f.radius);
+        let w = (-d2 * 1.6).exp() * f.strength;
+        for (ck, fk) in c.iter_mut().zip(f.color) {
+            *ck += (fk - *ck) * w;
+        }
+    }
+    Color32::from_rgb(c[0].round() as u8, c[1].round() as u8, c[2].round() as u8)
+}
+
+/// Cheap integer hash to `[0, 1)`, so each field keeps the same path from run to run.
+fn hash01(i: u32, salt: u32) -> f32 {
+    let mut h = i
+        .wrapping_mul(0x2c1b_3c6d)
+        .wrapping_add(salt.wrapping_mul(0x2745_7d83))
+        .wrapping_add(0x9e37_79b9);
+    h ^= h >> 15;
+    h = h.wrapping_mul(0x85eb_ca6b);
+    h ^= h >> 13;
+    h = h.wrapping_mul(0xc2b2_ae35);
+    h ^= h >> 16;
+    (h as f32) / (u32::MAX as f32)
 }
 
 /// Applies the app look to both the light and dark styles egui keeps.
 pub fn apply(ctx: &egui::Context) {
-    for (theme, p) in [(egui::Theme::Light, LIGHT), (egui::Theme::Dark, DARK)] {
+    for (theme, p) in [(egui::Theme::Light, palette_for(false)), (egui::Theme::Dark, palette_for(true))] {
         ctx.style_mut_of(theme, |style| {
             style.text_styles = [
                 (TextStyle::Small, FontId::new(12.0, FontFamily::Proportional)),
@@ -106,13 +352,14 @@ pub fn apply(ctx: &egui::Context) {
             v.dark_mode = p.dark;
             v.override_text_color = Some(p.text);
             v.panel_fill = p.window;
-            v.window_fill = p.card;
-            v.window_stroke = Stroke::new(1.0, p.stroke);
+            v.window_fill = p.float;
+            // Glass has its own bright rim.
+            v.window_stroke = if p.liquid { Stroke::NONE } else { Stroke::new(1.0, p.stroke) };
             v.window_corner_radius = CornerRadius::same(RADIUS_CARD);
             v.menu_corner_radius = CornerRadius::same(10);
-            v.extreme_bg_color = p.card;
+            v.extreme_bg_color = p.field;
             v.faint_bg_color = p.fill_secondary;
-            v.text_edit_bg_color = Some(p.card);
+            v.text_edit_bg_color = Some(p.field);
             v.hyperlink_color = p.accent;
             v.selection.bg_fill = p.selection;
             v.selection.stroke = Stroke::new(1.0, p.accent);
@@ -133,8 +380,8 @@ pub fn apply(ctx: &egui::Context) {
 
             let w = &mut v.widgets;
             let r = CornerRadius::same(RADIUS_CONTROL);
-            w.noninteractive.bg_fill = p.card;
-            w.noninteractive.weak_bg_fill = p.card;
+            w.noninteractive.bg_fill = p.field;
+            w.noninteractive.weak_bg_fill = p.field;
             w.noninteractive.bg_stroke = Stroke::new(1.0, p.stroke);
             w.noninteractive.fg_stroke = Stroke::new(1.0, p.text_secondary);
             w.noninteractive.corner_radius = r;

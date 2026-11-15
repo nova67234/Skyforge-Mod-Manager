@@ -345,7 +345,7 @@ pub fn search_field(ui: &mut Ui, text: &mut String, width: f32) -> Response {
 /// Apple-style segmented control. Returns true if the selection changed.
 pub fn segmented(ui: &mut Ui, selected: &mut usize, options: &[&str]) -> bool {
     let p = theme::palette(ui.ctx());
-    let seg_w = 96.0;
+    let seg_w = if options.len() > 3 { 78.0 } else { 96.0 };
     let h = 28.0;
     let total = vec2(seg_w * options.len() as f32 + 4.0, h + 4.0);
     let (rect, _) = ui.allocate_exact_size(total, Sense::hover());
@@ -356,7 +356,7 @@ pub fn segmented(ui: &mut Ui, selected: &mut usize, options: &[&str]) -> bool {
     let x = ui.ctx().animate_value_with_time(id, target_x, 0.15);
     let knob = Rect::from_min_size(pos2(x, rect.top() + 2.0), vec2(seg_w, h));
     ui.painter().rect_filled(knob.translate(vec2(0.0, 1.0)), 7.0, Color32::from_black_alpha(18));
-    ui.painter().rect_filled(knob, 6.0, if p.dark { p.fill_tertiary.blend(p.card) } else { p.card });
+    ui.painter().rect_filled(knob, 6.0, p.knob);
     for (i, opt) in options.iter().enumerate() {
         let r = Rect::from_min_size(pos2(rect.left() + 2.0 + seg_w * i as f32, rect.top() + 2.0), vec2(seg_w, h));
         let resp = ui.interact(r, id.with(i), Sense::click());

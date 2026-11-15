@@ -6,6 +6,7 @@ mod crash;
 mod game;
 mod gpu;
 mod ipc;
+mod liquid_glass;
 mod mods;
 mod needs;
 mod nexus;

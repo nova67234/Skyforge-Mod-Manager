@@ -5,8 +5,11 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
-eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland", "links"] }
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "x11", "wayland", "links"] }
 egui = "0.36"
+# Liquid Glass (src/liquid_glass.rs) draws through OpenGL paint callbacks.
+egui_glow = "0.36"
+glow = "0.17"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 directories = "6"

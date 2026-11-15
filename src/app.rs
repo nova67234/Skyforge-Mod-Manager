@@ -2,6 +2,7 @@ use crate::crash;
 use crate::game::{self, Game, Plugin, PluginKind};
 use crate::gpu::{self, GpuInfo};
 use crate::ipc;
+use crate::liquid_glass;
 use crate::mods::{self, DeployReport, Library, Mod, NexusRef, Paths};
 use crate::needs::{self, Needs};
 use crate::nexus::{self, FileInfo, NxmLink, Requirements, SearchMod, SearchPage};
@@ -23,7 +24,7 @@ const SEARCH_PAGE: u64 = 20;
 #[derive(Default, Serialize, Deserialize)]
 struct Settings {
     game_path: Option<PathBuf>,
-    /// 0 = system, 1 = light, 2 = dark
+    /// 0 = system, 1 = light, 2 = dark, 3 = Liquid Glass (light or dark with the system)
     theme: usize,
     /// Personal Nexus Mods API key, kept only on this PC.
     #[serde(default)]
@@ -46,6 +47,7 @@ impl Settings {
         }
     }
     fn apply_theme(&self, ctx: &egui::Context) {
+        theme::set_liquid(ctx, self.theme == 3);
         ctx.set_theme(match self.theme {
             1 => egui::ThemePreference::Light,
             2 => egui::ThemePreference::Dark,
@@ -2711,7 +2713,7 @@ impl App {
                 w::row(ui, |ui| {
                     ui.label(w::title("Theme"));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if w::segmented(ui, &mut self.settings.theme, &["Auto", "Light", "Dark"]) {
+                        if w::segmented(ui, &mut self.settings.theme, &["Auto", "Light", "Dark", "Glass"]) {
                             self.settings.apply_theme(ui.ctx());
                             self.settings.save(&self.paths);
                         }
@@ -3538,13 +3540,25 @@ impl eframe::App for App {
         self.pump(&ctx);
         let p = theme::palette(&ctx);
 
+        // Liquid Glass: the sidebar and the page are two rounded panes of glass floating
+        // over flowing colours. The glass itself is put in once the frame is drawn.
+        let _glass = liquid_glass::at_frame_end(&ctx);
+        theme::paint_backdrop(&ctx);
+        let (gap, half, radius) = if p.liquid {
+            (theme::PANEL_GAP, theme::PANEL_GAP / 2, theme::RADIUS_PANEL)
+        } else {
+            (0, 0, 0)
+        };
+
         egui::Panel::left("sidebar")
-            .exact_size(240.0)
+            .exact_size(240.0 + (gap + half) as f32)
             .resizable(false)
             .show_separator_line(false)
             .frame(
                 Frame::new()
                     .fill(p.sidebar)
+                    .corner_radius(egui::CornerRadius::same(radius))
+                    .outer_margin(Margin { left: gap, right: half, top: gap, bottom: gap })
                     .inner_margin(Margin { left: 12, right: 12, top: 14, bottom: 16 }),
             )
             .show(ui, |ui| self.sidebar(ui, &p));
@@ -3553,6 +3567,8 @@ impl eframe::App for App {
             .frame(
                 Frame::new()
                     .fill(p.window)
+                    .corner_radius(egui::CornerRadius::same(radius))
+                    .outer_margin(Margin { left: half, right: gap, top: gap, bottom: gap })
                     .inner_margin(Margin { left: 32, right: 32, top: 26, bottom: 20 }),
             )
             .show(ui, |ui| match self.page {
@@ -3572,6 +3588,11 @@ impl eframe::App for App {
     }
 
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
+        // Under Liquid Glass the panel colour is see-through; the backdrop covers the window.
+        if theme::is_liquid() {
+            let dark = if visuals.dark_mode { 0.05 } else { 0.9 };
+            return [dark, dark, dark, 1.0];
+        }
         visuals.panel_fill.to_normalized_gamma_f32()
     }
 }

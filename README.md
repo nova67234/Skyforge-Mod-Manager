@@ -13,6 +13,7 @@ It installs mods from archives or straight from Nexus Mods, keeps the game folde
 - **Requirement checks** — works out what each mod needs from its own files: the masters a plugin is built on, and whether an SKSE plugin needs the script extender or Address Library. Mods built for a different game version are flagged.
 - **Crash reports** — with Crash Logger or Trainwreck installed, the app finds the report Skyrim leaves behind and summarises what went wrong and which files were involved.
 - **Game-root files** — ENB, SKSE loader and upscaler DLLs that belong next to `SkyrimSE.exe` are placed there instead of in `Data`.
+- **Themes** — light, dark, or follow the system, plus **Liquid Glass**: the sidebar and page become panes of real frosted glass floating over slowly flowing colours. Pick one under Settings → Appearance.
 - **Graphics info** — the Settings page shows your graphics card, driver version and the DLSS runtimes found in the game folder.
 
 ## Download
