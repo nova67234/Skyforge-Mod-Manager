@@ -6,6 +6,9 @@ use std::process::Command;
 
 const EXE_NAME: &str = "SkyrimSE.exe";
 const SKSE_LOADER: &str = "skse64_loader.exe";
+/// Skyrim Special Edition's id on Steam.
+#[cfg(not(windows))]
+const STEAM_APP_ID: &str = "489830";
 
 /// Plugins that ship with the game (or Creation Club) and are always loaded.
 const CORE_PLUGINS: &[&str] = &[
@@ -54,6 +57,7 @@ impl Game {
         p.is_file().then_some(p)
     }
 
+    #[cfg(windows)]
     pub fn launch(&self) -> Result<()> {
         let exe = self.skse().unwrap_or_else(|| self.root.join(EXE_NAME));
         Command::new(&exe)
@@ -63,11 +67,34 @@ impl Game {
         Ok(())
     }
 
+    /// Skyrim is a Windows game, so outside Windows it can't be started directly: Steam
+    /// has to run it through Proton (or whichever compatibility layer it's set up with).
+    #[cfg(not(windows))]
+    pub fn launch(&self) -> Result<()> {
+        let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+        Command::new(opener)
+            .arg(format!("steam://rungameid/{STEAM_APP_ID}"))
+            .spawn()
+            .context("Couldn't ask Steam to start Skyrim")?;
+        Ok(())
+    }
+
     /// Directory the game reads Plugins.txt from.
+    #[cfg(windows)]
     pub fn local_appdata_dir() -> Result<PathBuf> {
         let base = std::env::var_os("LOCALAPPDATA")
             .ok_or_else(|| anyhow!("LOCALAPPDATA is not set"))?;
         Ok(PathBuf::from(base).join("Skyrim Special Edition"))
+    }
+
+    /// Directory the game reads Plugins.txt from: its local app data folder inside the
+    /// Proton prefix.
+    #[cfg(not(windows))]
+    pub fn local_appdata_dir() -> Result<PathBuf> {
+        let user = wine_user_dir().ok_or_else(|| {
+            anyhow!("Couldn't find Skyrim's Proton prefix. Start the game once from Steam first.")
+        })?;
+        Ok(user.join("AppData").join("Local").join("Skyrim Special Edition"))
     }
 
     pub fn plugins_txt() -> Result<PathBuf> {
@@ -93,6 +120,12 @@ impl Game {
 // Detection helpers
 // ---------------------------------------------------------------------------
 
+#[cfg(not(windows))]
+fn registry_paths() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+#[cfg(windows)]
 fn registry_paths() -> Vec<PathBuf> {
     use winreg::RegKey;
     use winreg::enums::*;
@@ -111,7 +144,9 @@ fn registry_paths() -> Vec<PathBuf> {
     out
 }
 
-fn steam_library_paths() -> Vec<PathBuf> {
+/// Where Steam itself is installed.
+#[cfg(windows)]
+fn steam_roots() -> Vec<PathBuf> {
     use winreg::RegKey;
     use winreg::enums::*;
     let mut roots = Vec::new();
@@ -122,9 +157,33 @@ fn steam_library_paths() -> Vec<PathBuf> {
         roots.push(PathBuf::from(p));
     }
     roots.push(PathBuf::from(r"C:\Program Files (x86)\Steam"));
+    roots
+}
 
+/// Where Steam itself is installed: the native, Flatpak and Snap locations on Linux, and
+/// the macOS one.
+#[cfg(not(windows))]
+fn steam_roots() -> Vec<PathBuf> {
+    let Some(dirs) = directories::UserDirs::new() else { return Vec::new() };
+    let home = dirs.home_dir();
+    [
+        ".local/share/Steam",
+        ".steam/steam",
+        ".steam/root",
+        ".var/app/com.valvesoftware.Steam/.local/share/Steam",
+        "snap/steam/common/.local/share/Steam",
+        "Library/Application Support/Steam",
+    ]
+    .iter()
+    .map(|p| home.join(p))
+    .filter(|p| p.is_dir())
+    .collect()
+}
+
+/// Every Steam library folder (each holds a `steamapps` folder).
+fn steam_libraries() -> Vec<PathBuf> {
     let mut libs = Vec::new();
-    for root in roots {
+    for root in steam_roots() {
         let vdf = root.join("steamapps").join("libraryfolders.vdf");
         if let Ok(text) = fs::read_to_string(&vdf) {
             for line in text.lines() {
@@ -137,11 +196,40 @@ fn steam_library_paths() -> Vec<PathBuf> {
         }
         libs.push(root);
     }
-    libs.into_iter()
+    libs
+}
+
+fn steam_library_paths() -> Vec<PathBuf> {
+    steam_libraries()
+        .into_iter()
         .map(|l| l.join("steamapps").join("common").join("Skyrim Special Edition"))
         .collect()
 }
 
+/// The Windows user folder inside Skyrim's Proton prefix, where the game keeps what it
+/// would put in the user's own folders on Windows (Plugins.txt, saves, SKSE logs).
+#[cfg(not(windows))]
+pub fn wine_user_dir() -> Option<PathBuf> {
+    steam_libraries()
+        .into_iter()
+        .map(|l| {
+            l.join("steamapps")
+                .join("compatdata")
+                .join(STEAM_APP_ID)
+                .join("pfx")
+                .join("drive_c")
+                .join("users")
+                .join("steamuser")
+        })
+        .find(|p| p.is_dir())
+}
+
+#[cfg(not(windows))]
+fn common_paths() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+#[cfg(windows)]
 fn common_paths() -> Vec<PathBuf> {
     let mut out = Vec::new();
     for drive in ["C", "D", "E", "F", "G"] {

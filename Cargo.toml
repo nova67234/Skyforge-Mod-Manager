@@ -2,6 +2,7 @@
 name = "Skyrim_Mod_Manager"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 
 [dependencies]
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland", "links"] }
@@ -15,10 +16,12 @@ sevenz-rust2 = "0.19"
 unrar = "0.5"
 rfd = "0.17"
 anyhow = "1"
-winreg = "0.55"
-windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 reqwest = { version = "0.12", features = ["blocking", "json"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 
 [profile.release]
 opt-level = 3

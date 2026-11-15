@@ -1295,7 +1295,14 @@ impl App {
     }
 
     fn open_folder(path: &std::path::Path) {
-        let _ = std::process::Command::new("explorer").arg(path).spawn();
+        let opener = if cfg!(windows) {
+            "explorer"
+        } else if cfg!(target_os = "macos") {
+            "open"
+        } else {
+            "xdg-open"
+        };
+        let _ = std::process::Command::new(opener).arg(path).spawn();
     }
 
     // -----------------------------------------------------------------------

@@ -1,0 +1,93 @@
+name: Build
+
+# Builds the app for Windows, Linux and macOS. Pushing a version tag (v1.2.3) also
+# publishes the builds as a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN: Skyrim_Mod_Manager
+  NAME: Skyforge-Mod-Manager
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows-x64
+          - os: ubuntu-22.04
+            label: linux-x64
+          - os: macos-latest
+            label: macos-universal
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update Rust
+        run: rustup update stable && rustup default stable
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cargo build --release --locked
+          mkdir dist
+          cp "target/release/$BIN.exe" "dist/$NAME-${{ matrix.label }}.exe"
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release --locked
+          mkdir dist pkg
+          cp "target/release/$BIN" "pkg/$NAME"
+          cp README.md LICENSE pkg/
+          tar -czf "dist/$NAME-${{ matrix.label }}.tar.gz" -C pkg .
+
+      - name: Build (macOS, Intel + Apple Silicon)
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add x86_64-apple-darwin aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          cargo build --release --locked --target aarch64-apple-darwin
+          mkdir dist pkg
+          lipo -create -output "pkg/$NAME" \
+            "target/x86_64-apple-darwin/release/$BIN" \
+            "target/aarch64-apple-darwin/release/$BIN"
+          cp README.md LICENSE pkg/
+          tar -czf "dist/$NAME-${{ matrix.label }}.tar.gz" -C pkg .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.label }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "Skyforge Mod Manager ${{ github.ref_name }}" \
+            --generate-notes

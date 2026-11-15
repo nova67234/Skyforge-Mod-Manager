@@ -441,9 +441,9 @@ mod tests {
 
     #[test]
     fn skse_plugins_folder() {
-        let root = Path::new("C:\\mods\\x");
-        assert!(in_skse_plugins(Path::new("C:\\mods\\x\\SKSE\\Plugins\\a.dll"), root));
-        assert!(!in_skse_plugins(Path::new("C:\\mods\\x\\Scripts\\a.dll"), root));
-        assert!(!in_skse_plugins(Path::new("C:\\mods\\x\\_root\\skse64_loader.exe"), root));
+        let root = Path::new("C:/mods/x");
+        assert!(in_skse_plugins(Path::new("C:/mods/x/SKSE/Plugins/a.dll"), root));
+        assert!(!in_skse_plugins(Path::new("C:/mods/x/Scripts/a.dll"), root));
+        assert!(!in_skse_plugins(Path::new("C:/mods/x/_root/skse64_loader.exe"), root));
     }
 }

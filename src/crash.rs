@@ -39,7 +39,11 @@ pub struct Report {
 
 /// Where SKSE (and so Crash Logger) keeps its logs.
 pub fn logs_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
     let docs = directories::UserDirs::new()?.document_dir()?.to_path_buf();
+    // The game runs inside a Proton prefix here, so its "Documents" is the one in there.
+    #[cfg(not(windows))]
+    let docs = crate::game::wine_user_dir()?.join("Documents");
     Some(docs.join("My Games").join("Skyrim Special Edition").join("SKSE"))
 }
 

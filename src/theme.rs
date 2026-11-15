@@ -182,7 +182,32 @@ pub fn icons() -> FontFamily {
     FontFamily::Name(FAMILY_ICONS.into())
 }
 
+/// The same icons as symbols from the fonts bundled with egui, for systems without Segoe
+/// Fluent Icons.
+#[cfg(not(windows))]
+pub mod icon {
+    pub const LIBRARY: &str = "\u{1F4DA}";
+    pub const LIST: &str = "\u{2630}";
+    pub const SETTINGS: &str = "\u{2699}";
+    pub const PLAY: &str = "\u{25B6}";
+    pub const ADD: &str = "\u{2795}";
+    pub const SEARCH: &str = "\u{1F50D}";
+    pub const MORE: &str = "\u{2026}";
+    pub const FOLDER: &str = "\u{1F4C1}";
+    pub const CHEVRON_UP: &str = "\u{23F6}";
+    pub const CHEVRON_DOWN: &str = "\u{23F7}";
+    pub const WARNING: &str = "\u{26A0}";
+    pub const CHECK: &str = "\u{2714}";
+    pub const REFRESH: &str = "\u{1F504}";
+    pub const GAME: &str = "\u{1F3AE}";
+    pub const CLOSE: &str = "\u{2716}";
+    pub const LOCK: &str = "\u{1F512}";
+    pub const DOWNLOAD: &str = "\u{1F4E5}";
+    pub const OPEN: &str = "\u{1F517}";
+}
+
 /// Segoe Fluent Icons glyphs (falls back to nothing if the font is missing).
+#[cfg(windows)]
 pub mod icon {
     pub const LIBRARY: &str = "\u{E8F1}";
     pub const LIST: &str = "\u{E8FD}";
@@ -204,7 +229,20 @@ pub mod icon {
     pub const OPEN: &str = "\u{E8A7}";
 }
 
+/// The Segoe fonts only exist on Windows. Elsewhere the app's own font families point at
+/// the fonts bundled with egui, so every weight and icon still has something to draw with.
+#[cfg(not(windows))]
+pub fn install_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    let bundled = fonts.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
+    for family in [semibold(), bold(), icons()] {
+        fonts.families.insert(family, bundled.clone());
+    }
+    ctx.set_fonts(fonts);
+}
+
 /// Uses the Windows UI fonts so text and icons look native instead of egui's bundled face.
+#[cfg(windows)]
 pub fn install_fonts(ctx: &egui::Context) {
     use egui::epaint::text::{FontData, FontInsert, FontPriority, InsertFontFamily};
     let add = |ctx: &egui::Context, path: &str, name: &str, family: FontFamily, fallback_prop: bool| {

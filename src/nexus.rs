@@ -482,13 +482,16 @@ fn unescape_html(s: &str) -> String {
 // nxm:// protocol registration (per-user, no admin rights needed)
 // ---------------------------------------------------------------------------
 
+#[cfg(windows)]
 const PROTOCOL_KEY: &str = r"Software\Classes\nxm";
 
+#[cfg(windows)]
 fn open_command(exe: &Path) -> String {
     format!("\"{}\" \"%1\"", exe.display())
 }
 
 /// True when "Mod Manager Download" links already open this executable.
+#[cfg(windows)]
 pub fn protocol_registered(exe: &Path) -> bool {
     let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
     hkcu.open_subkey(format!(r"{PROTOCOL_KEY}\shell\open\command"))
@@ -497,6 +500,7 @@ pub fn protocol_registered(exe: &Path) -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(windows)]
 pub fn register_protocol(exe: &Path) -> Result<()> {
     let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
     let (root, _) = hkcu.create_subkey(PROTOCOL_KEY).context("Couldn't write to the registry")?;
@@ -507,6 +511,61 @@ pub fn register_protocol(exe: &Path) -> Result<()> {
     let (cmd, _) = root.create_subkey(r"shell\open\command")?;
     cmd.set_value("", &open_command(exe))?;
     Ok(())
+}
+
+// On Linux a link handler is a desktop entry that claims the `x-scheme-handler/nxm` type.
+#[cfg(target_os = "linux")]
+const DESKTOP_ENTRY: &str = "skyforge-mod-manager-nxm.desktop";
+
+#[cfg(target_os = "linux")]
+fn desktop_entry_path() -> Option<PathBuf> {
+    Some(directories::BaseDirs::new()?.data_dir().join("applications").join(DESKTOP_ENTRY))
+}
+
+#[cfg(target_os = "linux")]
+fn open_command(exe: &Path) -> String {
+    format!("Exec=\"{}\" %u", exe.display())
+}
+
+/// True when "Mod Manager Download" links already open this executable.
+#[cfg(target_os = "linux")]
+pub fn protocol_registered(exe: &Path) -> bool {
+    desktop_entry_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .is_some_and(|text| text.lines().any(|l| l == open_command(exe)))
+}
+
+#[cfg(target_os = "linux")]
+pub fn register_protocol(exe: &Path) -> Result<()> {
+    let path = desktop_entry_path().context("Couldn't find where desktop entries are kept")?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let entry = format!(
+        "[Desktop Entry]\nType=Application\nName=Skyrim Mod Manager\n{}\nMimeType=x-scheme-handler/nxm;\nNoDisplay=true\nTerminal=false\n",
+        open_command(exe)
+    );
+    std::fs::write(&path, entry).context("Couldn't write the desktop entry")?;
+    let done = std::process::Command::new("xdg-mime")
+        .args(["default", DESKTOP_ENTRY, "x-scheme-handler/nxm"])
+        .status()
+        .context("Couldn't run xdg-mime")?;
+    if !done.success() {
+        anyhow::bail!("xdg-mime couldn't make this app the handler for nxm:// links");
+    }
+    Ok(())
+}
+
+// macOS only hands links to app bundles that declare the scheme, which a bare executable
+// can't do.
+#[cfg(not(any(windows, target_os = "linux")))]
+pub fn protocol_registered(_exe: &Path) -> bool {
+    false
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+pub fn register_protocol(_exe: &Path) -> Result<()> {
+    anyhow::bail!("Mod Manager Download links aren't supported on this system yet. Download the file and drop it onto the window instead.")
 }
 
 pub fn current_exe() -> Option<PathBuf> {
