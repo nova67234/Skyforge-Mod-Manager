@@ -1,6 +1,6 @@
 # Skyforge Mod Manager
 
-A mod manager for **Skyrim Special Edition** on Windows, written in Rust with [egui](https://github.com/emilk/egui).
+A mod manager for **Skyrim Special Edition**, written in Rust with [egui](https://github.com/emilk/egui). It runs on Windows, Linux and macOS.
 
 It installs mods from archives or straight from Nexus Mods, keeps the game folder clean, and tells you in plain language when something a mod needs is missing.
 
@@ -15,15 +15,31 @@ It installs mods from archives or straight from Nexus Mods, keeps the game folde
 - **Game-root files** — ENB, SKSE loader and upscaler DLLs that belong next to `SkyrimSE.exe` are placed there instead of in `Data`.
 - **Graphics info** — the Settings page shows your graphics card, driver version and the DLSS runtimes found in the game folder.
 
+## Download
+
+Grab the latest build from the [Releases page](https://github.com/nova67234/Skyforge-Mod-Manager/releases/latest):
+
+| System | File | How to run |
+| --- | --- | --- |
+| Windows 10/11 | `Skyforge-Mod-Manager-windows-x64.exe` | Double-click it. Windows may show a SmartScreen warning because the app isn't signed; choose **More info → Run anyway**. |
+| Linux (x64) | `Skyforge-Mod-Manager-linux-x64.tar.gz` | Extract it, then run `./Skyforge-Mod-Manager`. |
+| macOS (Intel and Apple Silicon) | `Skyforge-Mod-Manager-macos-universal.tar.gz` | Extract it, then run `./Skyforge-Mod-Manager` from Terminal. The app isn't signed, so the first time you may need to allow it under **System Settings → Privacy & Security**. |
+
 ## Requirements
 
-- Windows 10 or 11
 - Skyrim Special Edition (the app looks for your Steam install, or you can point it at the game folder)
 - A free [Nexus Mods](https://www.nexusmods.com/) account, only if you want in-app search and downloads
 
+## Platform notes
+
+Windows is the main platform and the one the app is tested on. The Linux and macOS builds are compiled and unit-tested automatically, but have had no hands-on testing yet, so expect rough edges and please report what you find.
+
+- **Linux** — Skyrim runs through Steam's Proton. The app finds the game in your Steam library and uses the game's Proton prefix for `Plugins.txt` and crash reports, so start the game once from Steam before managing mods. **Play** asks Steam to launch the game. Graphics card detection isn't available.
+- **macOS** — Skyrim Special Edition has no Mac version, so the app is only useful with a copy of the game you run through a compatibility layer and point the app at yourself. "Mod Manager Download" links and graphics card detection aren't available.
+
 ## Building
 
-You need a recent [Rust toolchain](https://rustup.rs/) (edition 2024, so Rust 1.85 or newer).
+You need a recent [Rust toolchain](https://rustup.rs/) (edition 2024, so Rust 1.85 or newer) and a C++ compiler. On Linux you also need the OpenSSL development package (`libssl-dev` on Debian/Ubuntu).
 
 ```sh
 git clone https://github.com/nova67234/Skyforge-Mod-Manager.git
@@ -31,7 +47,9 @@ cd Skyforge-Mod-Manager
 cargo run --release
 ```
 
-The finished executable is at `target/release/Skyrim_Mod_Manager.exe`.
+The finished executable is at `target/release/Skyrim_Mod_Manager` (`.exe` on Windows).
+
+Builds for all three systems are produced by GitHub Actions (`.github/workflows/release.yml`); pushing a version tag such as `v0.1.0` publishes them as a release.
 
 Run the tests with:
 
@@ -45,7 +63,7 @@ cargo test
 2. Follow the link to your Nexus account page and copy the **Personal API Key** at the bottom.
 3. Paste it into the app.
 
-The key is stored on your own PC only and is never part of this repository.
+The key is stored on your own computer only and is never part of this repository.
 
 ## Project layout
 
@@ -62,6 +80,10 @@ The key is stored on your own PC only and is never part of this repository.
 | `src/ipc.rs` | Keeping a single running copy of the app |
 | `src/theme.rs`, `src/widgets.rs` | Look and feel, custom controls |
 | `tools/` | PowerShell helpers for UI testing (screenshots, clicks, fake test mods) |
+
+## License
+
+Released under the [MIT License](LICENSE).
 
 ## Disclaimer
 
