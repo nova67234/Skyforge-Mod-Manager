@@ -1,0 +1,26 @@
+[package]
+name = "Skyrim_Mod_Manager"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland", "links"] }
+egui = "0.36"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "6"
+walkdir = "2"
+zip = "8"
+sevenz-rust2 = "0.19"
+unrar = "0.5"
+rfd = "0.17"
+anyhow = "1"
+winreg = "0.55"
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
